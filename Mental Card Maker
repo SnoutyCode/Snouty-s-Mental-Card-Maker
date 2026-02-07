@@ -33,9 +33,9 @@
       }
 
       circle.selected {
-        fill: #33b5ec !important;
         stroke: black !important;
         stroke-width: 2px !important;
+        filter: brightness(0.8);
       }
 
       rect {
@@ -47,9 +47,9 @@
       }
 
       rect.selected {
-        fill: #33b5ec !important;
         stroke: black !important;
         stroke-width: 2px !important;
+        filter: brightness(0.8);
       }
 
       text {
@@ -72,6 +72,41 @@
       button {
         margin: 2px;
       }
+
+      #colorPickerContainer {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 100;
+        display: none;
+        text-align: center;
+      }
+
+      #colorPickerContainer.show {
+        display: block;
+      }
+
+      #colorPickerContainer input[type="color"] {
+        width: 100px;
+        height: 100px;
+        border: none;
+        cursor: pointer;
+        margin-bottom: 15px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      #colorPickerContainer button {
+        margin: 5px;
+        padding: 8px 16px;
+        cursor: pointer;
+      }
     </style>
   </head>
 
@@ -87,7 +122,14 @@
     </div>
 
     <input type="file" id="fileInput" accept=".json" style="display: none" />
-    <input type="color" id="colorPicker" style="display: none" />
+
+    <div id="colorPickerContainer">
+      <p>Choisir une couleur:</p>
+      <input type="color" id="colorPicker" />
+      <br />
+      <button onclick="confirmColor()">✓ Sélectionner</button>
+      <button onclick="cancelColor()">✕ Annuler</button>
+    </div>
 
     <svg></svg>
 
@@ -181,24 +223,28 @@
         const padding = 12;
         const charWidth = 8.5; // Estimation plus précise avec police 13px
         const lineHeight = 18;
+        const lineSpacing = 1.2; // Doit correspondre au rendu
+        const maxWidth = 200; // Largeur maximale du rectangle
 
         if (shouldUseRectangle(d)) {
-          // Pour un rectangle, on enveloppe le texte avec ajustement dynamique
-          let maxCharsPerLine = 15;
-          let lines = wrapText(d.data.name, maxCharsPerLine);
+          // Calculer le nombre max de caractères par ligne basé sur la largeur maximale
+          const availableWidth = maxWidth - padding * 2;
+          const maxCharsPerLine = Math.floor(availableWidth / charWidth);
 
-          // Si encore trop de lignes, augmenter la largeur plutôt que limiter les lignes
-          while (lines.length > 4 && maxCharsPerLine < 30) {
-            maxCharsPerLine += 2;
-            lines = wrapText(d.data.name, maxCharsPerLine);
-          }
+          const lines = wrapText(d.data.name, maxCharsPerLine);
 
           // Trouver la ligne la plus longue pour la largeur
           const maxLineLength = Math.max(...lines.map((line) => line.length));
+          const actualWidth = maxLineLength * charWidth + padding * 2;
+
+          // Calculer la hauteur basée sur le nombre de lignes
+          const totalHeight =
+            lines.length * lineHeight * lineSpacing + padding * 2;
 
           return {
-            width: maxLineLength * charWidth + padding * 2,
-            height: Math.min(lines.length, 5) * lineHeight + padding * 2,
+            width: actualWidth,
+            height: totalHeight,
+            lines: lines,
           };
         }
 
@@ -309,10 +355,22 @@
           .style("pointer-events", "none")
           .style("font-size", "13px")
           .each(function (d) {
-            const maxCharsPerLine = shouldUseRectangle(d) ? 40 : 10;
-            const lines = wrapText(d.data.name, maxCharsPerLine);
-            const lineSpacing = 1.4;
-            const startY = -(lines.length - 1) * lineSpacing * 0.5;
+            const padding = 12;
+            const charWidth = 8.5;
+            const maxWidth = 200;
+            const lineHeight = 18;
+
+            // Utiliser la même logique que getNodeDimensions
+            let lines;
+            if (shouldUseRectangle(d)) {
+              const availableWidth = maxWidth - padding * 2;
+              const maxCharsPerLine = Math.floor(availableWidth / charWidth);
+              lines = wrapText(d.data.name, maxCharsPerLine);
+            } else {
+              lines = wrapText(d.data.name, 10);
+            }
+
+            const lineSpacing = 1.2; // Espacement plus compact
 
             d3.select(this)
               .selectAll("tspan")
@@ -320,7 +378,7 @@
               .enter()
               .append("tspan")
               .attr("x", 0)
-              .attr("y", (d, i) => startY + i * lineSpacing + "em")
+              .attr("dy", (d, i) => (i === 0 ? 0 : lineSpacing + "em"))
               .text((line) => line);
           });
       }
@@ -400,17 +458,24 @@
 
         const colorPicker = document.getElementById("colorPicker");
         colorPicker.value = selectedNodeData.color || "#b3e5ff";
-        colorPicker.click();
+
+        const container = document.getElementById("colorPickerContainer");
+        container.classList.add("show");
       }
 
-      document
-        .getElementById("colorPicker")
-        .addEventListener("change", function (e) {
-          if (selectedNodeData) {
-            selectedNodeData.color = e.target.value;
-            update();
-          }
-        });
+      function confirmColor() {
+        const colorPicker = document.getElementById("colorPicker");
+        if (selectedNodeData) {
+          selectedNodeData.color = colorPicker.value;
+          update();
+        }
+        cancelColor();
+      }
+
+      function cancelColor() {
+        const container = document.getElementById("colorPickerContainer");
+        container.classList.remove("show");
+      }
 
       function exportData() {
         const jsonString = JSON.stringify(data, null, 2);
